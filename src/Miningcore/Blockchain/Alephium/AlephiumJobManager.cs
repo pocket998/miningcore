@@ -150,7 +150,7 @@ public class AlephiumJobManager : JobManagerBase<AlephiumJob>
                                                 }
 
                                                 messageType = reader.ReadByte();
-                                                if (messageVersion == AlephiumConstants.MiningProtocolVersion && messageType == AlephiumConstants.JobsMessageType)
+                                                if (messageVersion == AlephiumConstants.MiningProtocolVersion && messageType >= AlephiumConstants.JobsMessageType)
                                                 {
                                                     jobSize = ReadBigEndianUInt32(reader);
                                                     logger.Debug(() => $"Parsing {jobSize} job(s) :D");
