@@ -354,14 +354,18 @@ public class WarthogPayoutHandler : PayoutHandlerBase,
                 if(chainInfo?.Error != null)
                     throw new Exception($"'{WarthogCommands.GetChainInfo}': {chainInfo.Error} (Code {chainInfo?.Code})");
 
-                // Force fee to 5 WART because automatic rounded fee is too low for fragmented WART wallet UTXOs
-                const ulong forcedFeeE8 = 500000000;
+                // Force requested fee to 5 WART, but still use Warthog's 16-bit fee encoder.
+                // Direct E8 values are rejected by the node with "inexact fee not allowed" (Code 203).
+                var feeE8Encoded = await restClient.Get<WarthogFeeE8EncodedResponse>(
+                    WarthogCommands.GetFeeE8Encoded.Replace(WarthogCommands.DataLabel, "5.0"), ct);
+                if(feeE8Encoded?.Error != null)
+                    throw new Exception($"'{WarthogCommands.GetFeeE8Encoded}': {feeE8Encoded.Error} (Code {feeE8Encoded?.Code})");
 
                 var amountE8 = (ulong) Math.Floor(((extraPoolPaymentProcessingConfig?.KeepTransactionFees == false) ? amount : (amount > (maximumTransactionFees / WarthogConstants.SmallestUnit) ? amount - (maximumTransactionFees / WarthogConstants.SmallestUnit) : amount)) * WarthogConstants.SmallestUnit);
 
                 // generate bytes to sign
                 var pinHashBytes = chainInfo.Data.PinHash.HexToByteArray();
-                var pinHeightNonceIdFeeBytes = SerializePinHeightNonceIdFee(chainInfo.Data.PinHeight, nonceId, forcedFeeE8);
+                var pinHeightNonceIdFeeBytes = SerializePinHeightNonceIdFee(chainInfo.Data.PinHeight, nonceId, feeE8Encoded.Data.Rounded);
                 var toAddressBytes = address.HexToByteArray().Take(WarthogConstants.ToAddressOffset).ToArray();
                 var amountBytes = SerializeAmount(amountE8);
                 var signatureBytes = SerializeSignature(pinHashBytes, pinHeightNonceIdFeeBytes, toAddressBytes, amountBytes);
@@ -386,7 +390,7 @@ public class WarthogPayoutHandler : PayoutHandlerBase,
                     NonceId = nonceId,
                     ToAddress = address,
                     Amount = amountE8,
-                    Fee = forcedFeeE8,
+                    Fee = feeE8Encoded.Data.Rounded,
                     Signature = fullSignatureBytes.ToHexString()
                 };
 
