@@ -354,15 +354,14 @@ public class WarthogPayoutHandler : PayoutHandlerBase,
                 if(chainInfo?.Error != null)
                     throw new Exception($"'{WarthogCommands.GetChainInfo}': {chainInfo.Error} (Code {chainInfo?.Code})");
 
-                var feeE8Encoded = await restClient.Get<WarthogFeeE8EncodedResponse>(WarthogCommands.GetFeeE8Encoded.Replace(WarthogCommands.DataLabel, maximumTransactionFees.ToString()), ct);
-                if(feeE8Encoded?.Error != null)
-                    throw new Exception($"'{WarthogCommands.GetFeeE8Encoded}': {feeE8Encoded.Error} (Code {feeE8Encoded?.Code})");
+                // Force fee to 5 WART because automatic rounded fee is too low for fragmented WART wallet UTXOs
+                const ulong forcedFeeE8 = 500000000;
 
                 var amountE8 = (ulong) Math.Floor(((extraPoolPaymentProcessingConfig?.KeepTransactionFees == false) ? amount : (amount > (maximumTransactionFees / WarthogConstants.SmallestUnit) ? amount - (maximumTransactionFees / WarthogConstants.SmallestUnit) : amount)) * WarthogConstants.SmallestUnit);
 
                 // generate bytes to sign
                 var pinHashBytes = chainInfo.Data.PinHash.HexToByteArray();
-                var pinHeightNonceIdFeeBytes = SerializePinHeightNonceIdFee(chainInfo.Data.PinHeight, nonceId, feeE8Encoded.Data.Rounded);
+                var pinHeightNonceIdFeeBytes = SerializePinHeightNonceIdFee(chainInfo.Data.PinHeight, nonceId, forcedFeeE8);
                 var toAddressBytes = address.HexToByteArray().Take(WarthogConstants.ToAddressOffset).ToArray();
                 var amountBytes = SerializeAmount(amountE8);
                 var signatureBytes = SerializeSignature(pinHashBytes, pinHeightNonceIdFeeBytes, toAddressBytes, amountBytes);
@@ -387,7 +386,7 @@ public class WarthogPayoutHandler : PayoutHandlerBase,
                     NonceId = nonceId,
                     ToAddress = address,
                     Amount = amountE8,
-                    Fee = feeE8Encoded.Data.Rounded,
+                    Fee = forcedFeeE8,
                     Signature = fullSignatureBytes.ToHexString()
                 };
 
